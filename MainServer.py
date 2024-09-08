@@ -1,19 +1,25 @@
-from fastapi import FastAPI, APIRouter, Request
+from fastapi import FastAPI, APIRouter, Request, logger
 from starlette.responses import RedirectResponse
 import fastapi
 from typing import Union
 from pydantic import BaseModel
-import dbManager as db
 
-app = FastAPI()
+from dbManager import Database
+
+db = Database()
+
+app = FastAPI(
+    log_level=None,
+)
+
 
 # Define the API routes
 app.title = "Laptop Server"
 app.debug = True
 app.openapi_url = "/openapi.json"
 app.version = "1.1.0"
-app.redoc_url = "/redoc"
-app.docs_url = "/docs"
+app.redoc_url = "/docs"
+app.docs_url = "/Olddocs"
 app.description = "Laptop Server API"
 
 @app.get("/OldDocs")
@@ -62,10 +68,11 @@ def Login(Username:str, Ip: str) -> dict:
     Returns:
     - dict: A dictionary containing the success status of the operation and the IP address for the user if they were found.
     """
-    if db.isAllowed(Username):
-        return {"Success": True, "Ip": db.getUser(Username)["ip"]}
+    user = db.getUser(Username)
+    if user is not None:
+        return {"Success": True, "Ip": user.ip}
     else:
-        return {"Success": False, "Reason": "Wrong Username"}
+        return {"Success": False, "Reason": "User Not Found"}
 
 
 @app.get("/AddUser")
@@ -83,13 +90,13 @@ def AddUser(
     Returns:
     - dict: A dictionary containing the success status of the operation.
     """
-    if not db.isAllowed(Username):
-        # Add the user to the database
-        db.addUser(Username, Ip)
-        return {"Success": True}
-    else:
-        # Return an error if the user already exists
-        return {"Success": False, "Reason": "Username Already Exists"}
+    users = db.listUsers()
+    if users is not None:
+        for user in users:
+            if user["username"] == Username:
+                return {"Success": False, "Reason": "Username Already Exists"}
+    db.addUser(Username, Ip)
+    return {"Success": True}
     
 
 @app.get("/ResetIP")
@@ -107,6 +114,25 @@ def ResetIP(Username:str, NewIp: str) -> dict:
     user = db.getUser(Username)
     if user is not None:
         db.resetIP(Username, NewIp)
+        return {"Success": True}
+    else:
+        return {"Success": False, "Reason": "Username Not Found"}
+    
+@app.get("/SetStatus")
+def SetStatus(Username:str, Status: str) -> dict:
+    """
+    Sets the status of a user in the database.
+
+    Args:
+    - Username (str): The username of the user to set the status for.
+    - Status (str): The new status to store for the user.
+
+    Returns:
+    - dict: A dictionary containing the success status of the operation.
+    """
+    user = db.getUser(Username)
+    if user is not None:
+        db.resetIP(Username, Status)
         return {"Success": True}
     else:
         return {"Success": False, "Reason": "Username Not Found"}

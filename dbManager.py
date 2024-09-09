@@ -1,21 +1,21 @@
 from tinydb import TinyDB, Query
 from dataclasses import dataclass
+from pydantic import BaseModel
+
+
 
 class status:
     """
-    Represents the status of a user.
+    Enum for the status of a user.
 
     Attributes:
-    - online (str): The user is online.
-    - offline (str): The user is offline.
-    - unknown (str): The user's status is unknown.
+    - unknown (str): The status of an unknown user.
+    - online (str): The status of an online user.
+    - offline (str): The status of an offline user.
     """
-    online = "online"
-    offline = "offline"
-    unknown = "unknown"
-    Online = "online"
-    Offline = "offline"
-    Unknown = "unknown"
+    unknown: str = "unknown"
+    online: str = "online"
+    offline: str = "offline"
     
     
 @dataclass
@@ -38,9 +38,13 @@ class Database:
         self.db = TinyDB(f"{dbName}.{dbType}")
 
         self.users = self.db.table('users')
-
+        
         self.query = Query()
 
+        for user in self.users:
+            self.users.update({"status": status.offline}, self.query.username == user["username"])
+            
+            
     def addUser(self, username: str, ip: str, status: status = status.unknown):
         self.users.insert({"username": username, "ip": ip, "status": status} )
         

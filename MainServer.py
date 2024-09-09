@@ -4,8 +4,8 @@ import fastapi
 from typing import Union
 from pydantic import BaseModel
 
-from dbManager import Database
-
+from dbManager import Database, status
+import requests
 db = Database()
 
 app = FastAPI(
@@ -21,18 +21,6 @@ app.version = "1.1.0"
 app.redoc_url = "/docs"
 app.docs_url = "/Olddocs"
 app.description = "Laptop Server API"
-
-@app.get("/OldDocs")
-def OldDocs():
-    return RedirectResponse("/docs")
-
-@app.get("/openapi.json")
-def get_open_api_endpoint():
-    return RedirectResponse("/docs")
-
-@app.get("/docs")
-def get_docs():
-    return RedirectResponse("/redoc")
 
 
 @app.get("/")
@@ -70,7 +58,11 @@ def Login(Username:str, Ip: str) -> dict:
     """
     user = db.getUser(Username)
     if user is not None:
-        return {"Success": True, "Ip": user.ip}
+        if user.ip == Ip:
+            return {"Success": True, "Ip": Ip}
+        else:
+            db.resetIP(Username, Ip)
+            return {"Success": True, "Ip": Ip, "Reason": "IP Changed"}
     else:
         return {"Success": False, "Reason": "User Not Found"}
 
@@ -132,7 +124,46 @@ def SetStatus(Username:str, Status: str) -> dict:
     """
     user = db.getUser(Username)
     if user is not None:
-        db.resetIP(Username, Status)
-        return {"Success": True}
+        if Status.lower() in ["online", "offline", "unknown"]:
+            db.resetStatus(Username, Status)
+            return {"Success": True}
+        else:
+            return {"Success": False, "Reason": "Invalid Status"}
+    else:
+        return {"Success": False, "Reason": "Username Not Found"}
+    
+@app.get("/Panel")
+def Panel() -> dict:
+    """
+    Returns a list of all users in the database.
+
+    Returns:    
+    - dict: A dictionary containing the success status of the operation and a list of all users in the database.
+    """
+    users = db.listUsers()
+    if users is not None:
+        return {"Success": True, "Users": users}
+    else:
+        return {"Success": False, "Reason": "No Users Found"}
+    
+@app.get("/sendCommand")
+def sendCommand(Username: str, Command: str) -> dict:
+    """
+    Sends a command to a user in the database.
+
+    Args:
+    - Username (str): The username of the user to send the command to.
+    - Command (str): The command to send to the user.
+
+    Returns:
+    - dict: A dictionary containing the success status of the operation.
+    """
+    user = db.getUser(Username)
+    if user is not None:
+        if user.status == status.online:
+            r = requests.get(f"http://{user.ip}/{Command}")
+            return {"Success": True, "Response": r.status_code}
+        else:
+            return {"Success": False, "Reason": "User is offline"}
     else:
         return {"Success": False, "Reason": "Username Not Found"}
